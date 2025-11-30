@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import Icon from '@/components/ui/icon';
 
 interface Stat {
@@ -25,9 +26,10 @@ interface DashboardTabProps {
   stats: Stat[];
   events: Event[];
   formatBadge: (format: string) => string;
+  isLoading?: boolean;
 }
 
-const DashboardTab = ({ stats, events, formatBadge }: DashboardTabProps) => {
+const DashboardTab = ({ stats, events, formatBadge, isLoading }: DashboardTabProps) => {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
@@ -57,8 +59,15 @@ const DashboardTab = ({ stats, events, formatBadge }: DashboardTabProps) => {
           <CardTitle>Ближайшие мероприятия</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {events.slice(0, 3).map((event) => (
+          {isLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-20 w-full" />
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {events.slice(0, 3).map((event) => (
               <div
                 key={event.id}
                 className="flex items-center justify-between border-b pb-3 last:border-0"
@@ -95,7 +104,8 @@ const DashboardTab = ({ stats, events, formatBadge }: DashboardTabProps) => {
                 </div>
               </div>
             ))}
-          </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

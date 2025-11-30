@@ -6,77 +6,41 @@ import DashboardTab from '@/components/DashboardTab';
 import EventsTab from '@/components/EventsTab';
 import MembersTab from '@/components/MembersTab';
 import AnalyticsTab from '@/components/AnalyticsTab';
+import { useMembers } from '@/hooks/useMembers';
+import { useEvents } from '@/hooks/useEvents';
+import { useStats } from '@/hooks/useStats';
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
+  
+  const { data: membersData = [], isLoading: membersLoading } = useMembers();
+  const { data: eventsData = [], isLoading: eventsLoading } = useEvents();
+  const { data: statsData } = useStats();
 
   const stats = [
-    { label: 'Всего участников', value: '2 847', icon: 'Users', trend: '+12%' },
-    { label: 'Активных сегодня', value: '834', icon: 'Activity', trend: '+5%' },
-    { label: 'Мероприятий в месяц', value: '24', icon: 'Calendar', trend: '+8%' },
-    { label: 'Средняя посещаемость', value: '87%', icon: 'TrendingUp', trend: '+3%' },
-  ];
-
-  const events = [
-    {
-      id: 1,
-      title: 'Женская баня с пармастером',
-      date: '2025-12-05',
-      time: '18:00',
-      location: 'Баня на Сретенке',
-      registered: 8,
-      capacity: 12,
-      format: 'women',
-      status: 'upcoming',
+    { 
+      label: 'Всего участников', 
+      value: statsData?.totalMembers.toString() || '0', 
+      icon: 'Users', 
+      trend: '+12%' 
     },
-    {
-      id: 2,
-      title: 'Мужская баня. Классический пар',
-      date: '2025-12-07',
-      time: '19:00',
-      location: 'Сандуны',
-      registered: 15,
-      capacity: 15,
-      format: 'men',
-      status: 'full',
+    { 
+      label: 'Активных сегодня', 
+      value: statsData?.activeMembers.toString() || '0', 
+      icon: 'Activity', 
+      trend: '+5%' 
     },
-    {
-      id: 3,
-      title: 'Совместная баня + купель',
-      date: '2025-12-10',
-      time: '20:00',
-      location: 'Усадьба Банная',
-      registered: 4,
-      capacity: 20,
-      format: 'mixed',
-      status: 'upcoming',
+    { 
+      label: 'Мероприятий в месяц', 
+      value: statsData?.eventsThisMonth.toString() || '0', 
+      icon: 'Calendar', 
+      trend: '+8%' 
     },
-  ];
-
-  const members = [
-    {
-      id: 1,
-      name: 'Анна Смирнова',
-      joined: '2024-03-15',
-      events: 12,
-      format: ['women', 'soft'],
-      status: 'active',
-    },
-    {
-      id: 2,
-      name: 'Дмитрий Волков',
-      joined: '2024-06-20',
-      events: 8,
-      format: ['men', 'hot'],
-      status: 'active',
-    },
-    {
-      id: 3,
-      name: 'Екатерина Петрова',
-      joined: '2024-09-01',
-      events: 3,
-      format: ['mixed', 'soft'],
-      status: 'new',
+    { 
+      label: 'Средняя посещаемость', 
+      value: `${statsData?.attendance || 0}%`, 
+      icon: 'TrendingUp', 
+      trend: '+3%' 
     },
   ];
 
@@ -142,15 +106,28 @@ const Index = () => {
 
         <main className="flex-1 p-8">
           {activeTab === 'dashboard' && (
-            <DashboardTab stats={stats} events={events} formatBadge={formatBadge} />
+            <DashboardTab 
+              stats={stats} 
+              events={eventsData} 
+              formatBadge={formatBadge}
+              isLoading={eventsLoading}
+            />
           )}
 
           {activeTab === 'events' && (
-            <EventsTab events={events} formatBadge={formatBadge} />
+            <EventsTab 
+              events={eventsData} 
+              formatBadge={formatBadge}
+              isLoading={eventsLoading}
+            />
           )}
 
           {activeTab === 'members' && (
-            <MembersTab members={members} formatBadge={formatBadge} />
+            <MembersTab 
+              members={membersData} 
+              formatBadge={formatBadge}
+              isLoading={membersLoading}
+            />
           )}
 
           {activeTab === 'analytics' && <AnalyticsTab />}

@@ -1,6 +1,7 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import Icon from '@/components/ui/icon';
 import {
   Dialog,
@@ -30,9 +31,10 @@ interface Event {
 interface EventsTabProps {
   events: Event[];
   formatBadge: (format: string) => string;
+  isLoading?: boolean;
 }
 
-const EventsTab = ({ events, formatBadge }: EventsTabProps) => {
+const EventsTab = ({ events, formatBadge, isLoading }: EventsTabProps) => {
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">

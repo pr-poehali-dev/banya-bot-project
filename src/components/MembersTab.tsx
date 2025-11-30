@@ -1,6 +1,7 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import Icon from '@/components/ui/icon';
 import { Input } from '@/components/ui/input';
@@ -17,9 +18,10 @@ interface Member {
 interface MembersTabProps {
   members: Member[];
   formatBadge: (format: string) => string;
+  isLoading?: boolean;
 }
 
-const MembersTab = ({ members, formatBadge }: MembersTabProps) => {
+const MembersTab = ({ members, formatBadge, isLoading }: MembersTabProps) => {
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
