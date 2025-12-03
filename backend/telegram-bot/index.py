@@ -430,19 +430,16 @@ def handle_db_request(method: str, path: str, event: Dict[str, Any]) -> Dict[str
                         e.id,
                         e.title,
                         e.description,
-                        e.event_date,
-                        e.start_time,
-                        e.end_time,
+                        e.date,
+                        e.time,
                         e.location,
                         e.capacity,
                         e.format,
-                        e.parmaster,
-                        e.price,
                         COUNT(er.member_id) as registered
                     FROM events e
                     LEFT JOIN event_registrations er ON e.id = er.event_id
                     GROUP BY e.id
-                    ORDER BY e.event_date DESC, e.start_time DESC
+                    ORDER BY e.date DESC, e.time DESC
                 ''')
                 
                 events = []
@@ -451,15 +448,12 @@ def handle_db_request(method: str, path: str, event: Dict[str, Any]) -> Dict[str
                         'id': row[0],
                         'title': row[1],
                         'description': row[2],
-                        'event_date': row[3].isoformat() if row[3] else None,
-                        'start_time': row[4].isoformat() if row[4] else None,
-                        'end_time': row[5].isoformat() if row[5] else None,
-                        'location': row[6],
-                        'capacity': row[7],
-                        'format': row[8],
-                        'parmaster': row[9],
-                        'price': row[10],
-                        'registered': row[11]
+                        'date': row[3].isoformat() if row[3] else None,
+                        'time': row[4].strftime('%H:%M') if row[4] else None,
+                        'location': row[5],
+                        'capacity': row[6],
+                        'format': row[7],
+                        'registered': row[8]
                     })
                 
                 cur.close()
@@ -479,17 +473,14 @@ def handle_db_request(method: str, path: str, event: Dict[str, Any]) -> Dict[str
                 
                 title = body.get('title', '').replace("'", "''")
                 description = body.get('description', '').replace("'", "''")
-                event_date = body.get('event_date', '')
-                start_time = body.get('start_time', '')
-                end_time = body.get('end_time', '')
+                date_val = body.get('date', '')
+                time_val = body.get('time', '')
                 location = body.get('location', '').replace("'", "''")
                 capacity = int(body.get('capacity', 10))
                 format_val = body.get('format', 'mixed').replace("'", "''")
-                parmaster = body.get('parmaster', '').replace("'", "''")
-                price = int(body.get('price', 0))
                 
                 cur.execute(
-                    f"INSERT INTO events (title, description, event_date, start_time, end_time, location, capacity, format, parmaster, price) VALUES ('{title}', '{description}', '{event_date}', '{start_time}', '{end_time}', '{location}', {capacity}, '{format_val}', '{parmaster}', {price}) RETURNING id, title, description, event_date, start_time, end_time, location, capacity, format, parmaster, price"
+                    f"INSERT INTO events (title, description, date, time, location, capacity, format) VALUES ('{title}', '{description}', '{date_val}', '{time_val}', '{location}', {capacity}, '{format_val}') RETURNING id, title, description, date, time, location, capacity, format"
                 )
                 
                 result = cur.fetchone()
@@ -507,14 +498,11 @@ def handle_db_request(method: str, path: str, event: Dict[str, Any]) -> Dict[str
                         'id': result[0],
                         'title': result[1],
                         'description': result[2],
-                        'event_date': result[3].isoformat() if result[3] else None,
-                        'start_time': result[4].isoformat() if result[4] else None,
-                        'end_time': result[5].isoformat() if result[5] else None,
-                        'location': result[6],
-                        'capacity': result[7],
-                        'format': result[8],
-                        'parmaster': result[9],
-                        'price': result[10]
+                        'date': result[3].isoformat() if result[3] else None,
+                        'time': result[4].strftime('%H:%M') if result[4] else None,
+                        'location': result[5],
+                        'capacity': result[6],
+                        'format': result[7]
                     })
                 }
         
@@ -522,7 +510,7 @@ def handle_db_request(method: str, path: str, event: Dict[str, Any]) -> Dict[str
             cur.execute("SELECT COUNT(*) FROM members")
             total_members = cur.fetchone()[0]
             
-            cur.execute("SELECT COUNT(*) FROM events WHERE event_date >= CURRENT_DATE")
+            cur.execute("SELECT COUNT(*) FROM events WHERE date >= CURRENT_DATE")
             upcoming_events = cur.fetchone()[0]
             
             cur.execute("SELECT COUNT(*) FROM event_registrations")
