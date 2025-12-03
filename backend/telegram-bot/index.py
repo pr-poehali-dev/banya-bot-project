@@ -74,12 +74,15 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         username = user.get('username', '')
         full_name = f"{first_name} {last_name}".strip() or username or str(telegram_id)
         
+        print(f"Connecting to database...")
         conn = psycopg2.connect(database_url)
         cur = conn.cursor()
+        print(f"Database connected successfully")
         
         response_text = ''
         
         if text.startswith('/start'):
+            print(f"Processing /start command for user {telegram_id}")
             cur.execute(
                 f"SELECT id FROM members WHERE telegram_id = {int(telegram_id)}"
             )
@@ -283,6 +286,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             )
             conn.commit()
             
+            print(f"Sending response to {chat_id}: {response_text[:50]}...")
             try:
                 url = f'https://api.telegram.org/bot{bot_token}/sendMessage'
                 data = urllib.parse.urlencode({
@@ -292,9 +296,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 
                 req = urllib.request.Request(url, data=data)
                 response = urllib.request.urlopen(req, timeout=10)
-                print(f"Message sent to {chat_id}: {response.read().decode()}")
+                result = response.read().decode()
+                print(f"Message sent successfully: {result}")
             except Exception as send_error:
                 print(f"Failed to send message: {send_error}")
+                import traceback
+                print(traceback.format_exc())
         
         cur.close()
         conn.close()
