@@ -278,7 +278,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             escaped_text = text.replace("'", "''")
             now_timestamp = datetime.now().isoformat()
             cur.execute(
-                f"INSERT INTO messages (telegram_id, message_text, direction, sent_at) VALUES ({int(telegram_id)}, '{escaped_text}', 'incoming', '{now_timestamp}')"
+                f"INSERT INTO messages (telegram_id, message_text, sender_type, created_at) VALUES ({int(telegram_id)}, '{escaped_text}', 'user', '{now_timestamp}')"
             )
             conn.commit()
             print(f"Incoming message saved to DB")
@@ -288,7 +288,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             
             escaped_response = response_text.replace("'", "''")
             cur.execute(
-                f"INSERT INTO messages (telegram_id, message_text, direction, sent_at) VALUES ({int(chat_id)}, '{escaped_response}', 'outgoing', '{now_timestamp}')"
+                f"INSERT INTO messages (telegram_id, message_text, sender_type, created_at) VALUES ({int(chat_id)}, '{escaped_response}', 'bot', '{now_timestamp}')"
             )
             conn.commit()
             
