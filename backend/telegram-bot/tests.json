@@ -1,19 +1,18 @@
 {
   "tests": [
     {
-      "name": "Test get members",
-      "method": "GET",
-      "path": "/members",
+      "name": "Test telegram webhook",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "message": {
+          "chat": {"id": 123456},
+          "from": {"id": 123456, "first_name": "Test"},
+          "text": "/help"
+        }
+      },
       "expectedStatus": 200,
-      "expectedBody": [],
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "Test get events",
-      "method": "GET",
-      "path": "/events",
-      "expectedStatus": 200,
-      "expectedBody": [],
+      "expectedBody": {"ok": true},
       "bodyMatcher": "partial"
     }
   ]

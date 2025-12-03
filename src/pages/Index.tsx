@@ -101,6 +101,16 @@ const Index = () => {
                 {item.label}
               </button>
             ))}
+            
+            <div className="pt-4 mt-4 border-t border-border">
+              <a
+                href="/messages"
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors"
+              >
+                <Icon name="MessageSquare" size={18} />
+                Диалоги с гостями
+              </a>
+            </div>
           </nav>
         </aside>
 

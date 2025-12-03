@@ -12,7 +12,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Returns: HTTP response dict with statusCode, headers, body
     '''
     method: str = event.get('httpMethod', 'POST')
-    path = event.get('pathParams', {}).get('resource', '')
+    raw_path = event.get('url', '')
+    path = raw_path.strip('/').split('/')[-1] if raw_path else ''
     
     if method == 'OPTIONS':
         return {
@@ -26,7 +27,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'body': ''
         }
     
-    if path in ['members', 'events', 'stats']:
+    if path in ['members', 'events', 'stats', 'messages', 'send-message']:
         return handle_db_request(method, path, event)
     
     if method != 'POST':
@@ -268,16 +269,39 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     response_text += f'\nПредпочтения: {prefs}'
         
         else:
-            response_text = 'Не понял команду 🤔\n\nИспользуйте /help для списка доступных команд'
+            # Свободное сообщение от участника - сохраняем в БД для администраторов
+            cur.execute("SELECT id FROM members WHERE telegram_id = %s", (telegram_id,))
+            member = cur.fetchone()
+            
+            if member:
+                member_id = member[0]
+                cur.execute(
+                    "INSERT INTO messages (member_id, telegram_id, message_text, sender_type) VALUES (%s, %s, %s, %s)",
+                    (member_id, telegram_id, text, 'member')
+                )
+                conn.commit()
+                
+                response_text = f'''Спасибо за сообщение! 💬
+
+Администратор получит ваше сообщение и ответит в ближайшее время.
+
+Используйте /help для списка команд'''
+            else:
+                response_text = 'Сначала используйте /start для регистрации'
         
         cur.close()
         conn.close()
         
-        send_message(bot_token, chat_id, response_text)
+        if response_text and bot_token:
+            try:
+                send_message(bot_token, chat_id, response_text)
+            except:
+                pass
         
         return {
             'statusCode': 200,
             'headers': {'Content-Type': 'application/json'},
+            'isBase64Encoded': False,
             'body': json.dumps({'ok': True})
         }
         
@@ -285,6 +309,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         return {
             'statusCode': 500,
             'headers': {'Content-Type': 'application/json'},
+            'isBase64Encoded': False,
             'body': json.dumps({'error': str(e)})
         }
 
@@ -306,6 +331,7 @@ def send_message(token: str, chat_id: int, text: str) -> None:
 
 def handle_db_request(method: str, path: str, event: Dict[str, Any]) -> Dict[str, Any]:
     database_url = os.environ.get('DATABASE_URL', '')
+    bot_token = os.environ.get('TELEGRAM_BOT_TOKEN', '')
     
     if not database_url:
         return {
@@ -317,7 +343,8 @@ def handle_db_request(method: str, path: str, event: Dict[str, Any]) -> Dict[str
             'body': json.dumps({'error': 'Database not configured'})
         }
     
-    if method != 'GET':
+    # Разрешаем POST для отправки сообщений
+    if method != 'GET' and path not in ['send-message']:
         return {
             'statusCode': 405,
             'headers': {
@@ -436,6 +463,93 @@ def handle_db_request(method: str, path: str, event: Dict[str, Any]) -> Dict[str
                 'eventsThisMonth': events_this_month,
                 'attendance': int(attendance)
             }
+        
+        elif path == 'messages':
+            # Получаем все сообщения с информацией об участниках
+            cur.execute('''
+                SELECT 
+                    m.id,
+                    m.telegram_id,
+                    m.message_text,
+                    m.sender_type,
+                    m.created_at,
+                    m.is_read,
+                    m.admin_name,
+                    mem.name as member_name,
+                    mem.username
+                FROM messages m
+                LEFT JOIN members mem ON m.member_id = mem.id
+                ORDER BY m.created_at DESC
+                LIMIT 100
+            ''')
+            
+            rows = cur.fetchall()
+            messages = []
+            
+            for row in rows:
+                msg_id, tg_id, text, sender, created, is_read, admin, mem_name, username = row
+                messages.append({
+                    'id': msg_id,
+                    'telegramId': tg_id,
+                    'text': text,
+                    'sender': sender,
+                    'timestamp': created.isoformat(),
+                    'isRead': is_read,
+                    'adminName': admin,
+                    'memberName': mem_name,
+                    'username': username
+                })
+            
+            result = messages
+        
+        elif path == 'send-message':
+            # Отправка сообщения участнику от администратора
+            if method != 'POST':
+                return {
+                    'statusCode': 405,
+                    'headers': {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                    },
+                    'body': json.dumps({'error': 'Method not allowed'})
+                }
+            
+            body = json.loads(event.get('body', '{}'))
+            telegram_id = body.get('telegramId')
+            message_text = body.get('message')
+            admin_name = body.get('adminName', 'Администратор')
+            
+            if not telegram_id or not message_text:
+                return {
+                    'statusCode': 400,
+                    'headers': {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                    },
+                    'body': json.dumps({'error': 'Missing telegramId or message'})
+                }
+            
+            # Сохраняем сообщение в БД
+            cur.execute(
+                "SELECT id FROM members WHERE telegram_id = %s",
+                (telegram_id,)
+            )
+            member = cur.fetchone()
+            
+            if member:
+                member_id = member[0]
+                cur.execute(
+                    "INSERT INTO messages (member_id, telegram_id, message_text, sender_type, admin_name) VALUES (%s, %s, %s, %s, %s)",
+                    (member_id, telegram_id, message_text, 'admin', admin_name)
+                )
+                conn.commit()
+            
+            # Отправляем сообщение в Telegram
+            if bot_token:
+                formatted_text = f"💬 Сообщение от администратора:\n\n{message_text}"
+                send_message(bot_token, telegram_id, formatted_text)
+            
+            result = {'success': True}
         
         else:
             result = {'error': 'Unknown resource'}
