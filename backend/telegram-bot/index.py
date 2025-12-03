@@ -273,15 +273,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         
         print(f"Response text set: '{response_text[:100] if response_text else 'EMPTY'}'")
         
+        escaped_text = text.replace("'", "''")
+        now_timestamp = datetime.now().isoformat()
+        cur.execute(
+            f"INSERT INTO messages (telegram_id, message_text, sender_type, created_at) VALUES ({int(telegram_id)}, '{escaped_text}', 'member', '{now_timestamp}')"
+        )
+        conn.commit()
+        print(f"Incoming message saved to DB")
+        
         if response_text:
             print(f"response_text is not empty, proceeding to send")
-            escaped_text = text.replace("'", "''")
-            now_timestamp = datetime.now().isoformat()
-            cur.execute(
-                f"INSERT INTO messages (telegram_id, message_text, sender_type, created_at) VALUES ({int(telegram_id)}, '{escaped_text}', 'member', '{now_timestamp}')"
-            )
-            conn.commit()
-            print(f"Incoming message saved to DB")
             
             import urllib.request
             import urllib.parse
