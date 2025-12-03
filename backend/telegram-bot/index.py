@@ -89,6 +89,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             existing = cur.fetchone()
             
             if not existing:
+                print(f"New user, inserting into database")
                 escaped_full_name = full_name.replace("'", "''")
                 escaped_username = username.replace("'", "''")
                 today_date = datetime.now().date().isoformat()
@@ -107,8 +108,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 🔹 Получить информацию о банях и пармастерах
 
 Используй /help для списка команд'''
+                print(f"Set welcome response_text for new user")
             else:
                 response_text = f'С возвращением, {first_name}! 👋\n\nИспользуй /help для списка команд'
+                print(f"Set welcome back response_text for existing user")
         
         elif text.startswith('/help'):
             response_text = '''📋 Доступные команды:
@@ -269,13 +272,17 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         else:
             response_text = 'Неизвестная команда. Используйте /help для списка команд'
         
+        print(f"Response text set: '{response_text[:100] if response_text else 'EMPTY'}'")
+        
         if response_text:
+            print(f"response_text is not empty, proceeding to send")
             escaped_text = text.replace("'", "''")
             now_timestamp = datetime.now().isoformat()
             cur.execute(
                 f"INSERT INTO messages (telegram_id, message_text, direction, sent_at) VALUES ({int(telegram_id)}, '{escaped_text}', 'incoming', '{now_timestamp}')"
             )
             conn.commit()
+            print(f"Incoming message saved to DB")
             
             import urllib.request
             import urllib.parse
