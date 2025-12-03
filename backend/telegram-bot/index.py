@@ -127,17 +127,17 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 SELECT 
                     e.id,
                     e.title,
-                    e.event_date,
-                    e.start_time,
+                    e.date,
+                    e.time,
                     e.location,
                     e.capacity,
                     e.format,
                     COUNT(er.member_id) as registered
                 FROM events e
                 LEFT JOIN event_registrations er ON e.id = er.event_id
-                WHERE e.event_date >= CURRENT_DATE
+                WHERE e.date >= CURRENT_DATE
                 GROUP BY e.id
-                ORDER BY e.event_date, e.start_time
+                ORDER BY e.date, e.time
                 LIMIT 5
             ''')
             
@@ -190,7 +190,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                         else:
                             now_timestamp = datetime.now().isoformat()
                             cur.execute(
-                                f"INSERT INTO event_registrations (event_id, member_id, registered_at, status) VALUES ({int(event_id)}, {int(member_id)}, '{now_timestamp}', 'registered')"
+                                f"INSERT INTO event_registrations (event_id, member_id, registered_at) VALUES ({int(event_id)}, {int(member_id)}, '{now_timestamp}')"
                             )
                             conn.commit()
                             response_text = 'Отлично! Вы записаны на мероприятие 🎉'
@@ -209,14 +209,14 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 cur.execute(f'''
                     SELECT 
                         e.title,
-                        e.event_date,
-                        e.start_time,
+                        e.date,
+                        e.time,
                         e.location,
-                        er.status
+                        er.attended
                     FROM event_registrations er
                     JOIN events e ON er.event_id = e.id
-                    WHERE er.member_id = {int(member_id)} AND e.event_date >= CURRENT_DATE
-                    ORDER BY e.event_date, e.start_time
+                    WHERE er.member_id = {int(member_id)} AND e.date >= CURRENT_DATE
+                    ORDER BY e.date, e.time
                 ''')
                 
                 my_events = cur.fetchall()
@@ -226,9 +226,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 else:
                     response_text = '📝 Ваши записи:\n\n'
                     for evt in my_events:
-                        title, date, time, location, status = evt
-                        status_emoji = {'registered': '✅', 'attended': '🎉', 'cancelled': '❌'}
-                        emoji = status_emoji.get(status, '📋')
+                        title, date, time, location, attended = evt
+                        emoji = '🎉' if attended else '✅'
                         
                         response_text += f'''{emoji} {title}
 📅 {date.strftime("%d.%m.%Y")} в {time.strftime("%H:%M")}
@@ -250,9 +249,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                         m.name,
                         m.joined_at,
                         m.status,
-                        COUNT(DISTINCT er.event_id) as events_attended
+                        COUNT(DISTINCT CASE WHEN er.attended = true THEN er.event_id END) as events_attended
                     FROM members m
-                    LEFT JOIN event_registrations er ON m.id = er.member_id AND er.status = 'attended'
+                    LEFT JOIN event_registrations er ON m.id = er.member_id
                     WHERE m.id = {int(member_id)}
                     GROUP BY m.id, m.name, m.joined_at, m.status
                 ''')
@@ -278,7 +277,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             escaped_text = text.replace("'", "''")
             now_timestamp = datetime.now().isoformat()
             cur.execute(
-                f"INSERT INTO messages (telegram_id, message_text, sender_type, created_at) VALUES ({int(telegram_id)}, '{escaped_text}', 'user', '{now_timestamp}')"
+                f"INSERT INTO messages (telegram_id, message_text, sender_type, created_at) VALUES ({int(telegram_id)}, '{escaped_text}', 'member', '{now_timestamp}')"
             )
             conn.commit()
             print(f"Incoming message saved to DB")
@@ -288,7 +287,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             
             escaped_response = response_text.replace("'", "''")
             cur.execute(
-                f"INSERT INTO messages (telegram_id, message_text, sender_type, created_at) VALUES ({int(chat_id)}, '{escaped_response}', 'bot', '{now_timestamp}')"
+                f"INSERT INTO messages (telegram_id, message_text, sender_type, created_at) VALUES ({int(chat_id)}, '{escaped_response}', 'admin', '{now_timestamp}')"
             )
             conn.commit()
             
