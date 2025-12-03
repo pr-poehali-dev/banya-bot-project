@@ -268,7 +268,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 Посещено мероприятий: {attended}'''
         
         else:
-            response_text = 'Неизвестная команда. Используйте /help для списка команд'
+            if text.startswith('/'):
+                response_text = 'Неизвестная команда. Используйте /help для списка команд'
         
         print(f"Response text set: '{response_text[:100] if response_text else 'EMPTY'}'")
         
