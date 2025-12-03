@@ -75,15 +75,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         
         if text.startswith('/start'):
             cur.execute(
-                "SELECT id FROM members WHERE telegram_id = %s",
-                (telegram_id,)
+                f"SELECT id FROM members WHERE telegram_id = {int(telegram_id)}"
             )
             existing = cur.fetchone()
             
             if not existing:
+                escaped_full_name = full_name.replace("'", "''")
+                escaped_username = username.replace("'", "''")
+                today_date = datetime.now().date().isoformat()
                 cur.execute(
-                    "INSERT INTO members (name, telegram_id, username, joined_date, status) VALUES (%s, %s, %s, %s, %s) RETURNING id",
-                    (full_name, telegram_id, username, datetime.now().date(), 'new')
+                    f"INSERT INTO members (name, telegram_id, username, joined_date, status) VALUES ('{escaped_full_name}', {int(telegram_id)}, '{escaped_username}', '{today_date}', 'new') RETURNING id"
                 )
                 conn.commit()
                 
@@ -152,7 +153,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             try:
                 event_id = int(text.split('_')[1])
                 
-                cur.execute("SELECT id FROM members WHERE telegram_id = %s", (telegram_id,))
+                cur.execute(f"SELECT id FROM members WHERE telegram_id = {int(telegram_id)}")
                 member = cur.fetchone()
                 
                 if not member:
@@ -161,8 +162,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     member_id = member[0]
                     
                     cur.execute(
-                        "SELECT id FROM event_registrations WHERE event_id = %s AND member_id = %s",
-                        (event_id, member_id)
+                        f"SELECT id FROM event_registrations WHERE event_id = {int(event_id)} AND member_id = {int(member_id)}"
                     )
                     existing_reg = cur.fetchone()
                     
@@ -170,17 +170,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                         response_text = 'Вы уже записаны на это мероприятие ✅'
                     else:
                         cur.execute(
-                            "SELECT capacity, (SELECT COUNT(*) FROM event_registrations WHERE event_id = %s) as registered FROM events WHERE id = %s",
-                            (event_id, event_id)
+                            f"SELECT capacity, (SELECT COUNT(*) FROM event_registrations WHERE event_id = {int(event_id)}) as registered FROM events WHERE id = {int(event_id)}"
                         )
                         capacity_check = cur.fetchone()
                         
                         if capacity_check and capacity_check[1] >= capacity_check[0]:
                             response_text = 'К сожалению, все места заняты 😔'
                         else:
+                            now_timestamp = datetime.now().isoformat()
                             cur.execute(
-                                "INSERT INTO event_registrations (event_id, member_id, registered_at, status) VALUES (%s, %s, %s, %s)",
-                                (event_id, member_id, datetime.now(), 'registered')
+                                f"INSERT INTO event_registrations (event_id, member_id, registered_at, status) VALUES ({int(event_id)}, {int(member_id)}, '{now_timestamp}', 'registered')"
                             )
                             conn.commit()
                             response_text = 'Отлично! Вы записаны на мероприятие 🎉'
@@ -188,7 +187,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 response_text = 'Неверный формат команды'
         
         elif text.startswith('/myevents'):
-            cur.execute("SELECT id FROM members WHERE telegram_id = %s", (telegram_id,))
+            cur.execute(f"SELECT id FROM members WHERE telegram_id = {int(telegram_id)}")
             member = cur.fetchone()
             
             if not member:
@@ -196,7 +195,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             else:
                 member_id = member[0]
                 
-                cur.execute('''
+                cur.execute(f'''
                     SELECT 
                         e.title,
                         e.event_date,
@@ -205,9 +204,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                         er.status
                     FROM event_registrations er
                     JOIN events e ON er.event_id = e.id
-                    WHERE er.member_id = %s AND e.event_date >= CURRENT_DATE
+                    WHERE er.member_id = {int(member_id)} AND e.event_date >= CURRENT_DATE
                     ORDER BY e.event_date, e.start_time
-                ''', (member_id,))
+                ''')
                 
                 my_events = cur.fetchall()
                 
@@ -218,7 +217,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     for evt in my_events:
                         title, date, time, location, status = evt
                         status_emoji = {'registered': '✅', 'attended': '🎉', 'cancelled': '❌'}
-                        emoji = status_emoji.get(status, '📌')
+                        emoji = status_emoji.get(status, '📋')
                         
                         response_text += f'''{emoji} {title}
 📅 {date.strftime("%d.%m.%Y")} в {time.strftime("%H:%M")}
@@ -227,111 +226,87 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 '''
         
         elif text.startswith('/profile'):
-            cur.execute('''
-                SELECT 
-                    m.name,
-                    m.joined_date,
-                    m.status,
-                    COUNT(DISTINCT er.event_id) as events_count,
-                    ARRAY_AGG(DISTINCT mp.format ORDER BY mp.format) as formats
-                FROM members m
-                LEFT JOIN event_registrations er ON m.id = er.member_id
-                LEFT JOIN member_preferences mp ON m.id = mp.member_id
-                WHERE m.telegram_id = %s
-                GROUP BY m.id, m.name, m.joined_date, m.status
-            ''', (telegram_id,))
-            
-            profile = cur.fetchone()
-            
-            if not profile:
-                response_text = 'Профиль не найден. Используйте /start для регистрации'
-            else:
-                name, joined, status, events_count, formats = profile
-                
-                format_names = {
-                    'women': 'Женская',
-                    'men': 'Мужская', 
-                    'mixed': 'Совместная',
-                    'soft': 'Мягкий пар',
-                    'hot': 'Горячий пар'
-                }
-                
-                prefs = ', '.join([format_names.get(f, f) for f in (formats or []) if f])
-                
-                response_text = f'''👤 Ваш профиль:
-
-Имя: {name}
-Статус: {"Новичок" if status == "new" else "Активный"}
-В клубе с: {joined.strftime("%d.%m.%Y")}
-Посещено мероприятий: {events_count}'''
-                
-                if prefs:
-                    response_text += f'\nПредпочтения: {prefs}'
-        
-        else:
-            # Свободное сообщение от участника - сохраняем в БД для администраторов
-            cur.execute("SELECT id FROM members WHERE telegram_id = %s", (telegram_id,))
+            cur.execute(f"SELECT id FROM members WHERE telegram_id = {int(telegram_id)}")
             member = cur.fetchone()
             
-            if member:
-                member_id = member[0]
-                cur.execute(
-                    "INSERT INTO messages (member_id, telegram_id, message_text, sender_type) VALUES (%s, %s, %s, %s)",
-                    (member_id, telegram_id, text, 'member')
-                )
-                conn.commit()
-                
-                response_text = f'''Спасибо за сообщение! 💬
-
-Администратор получит ваше сообщение и ответит в ближайшее время.
-
-Используйте /help для списка команд'''
-            else:
+            if not member:
                 response_text = 'Сначала используйте /start для регистрации'
+            else:
+                member_id = member[0]
+                
+                cur.execute(f'''
+                    SELECT 
+                        m.name,
+                        m.joined_date,
+                        m.status,
+                        COUNT(DISTINCT er.event_id) as events_attended
+                    FROM members m
+                    LEFT JOIN event_registrations er ON m.id = er.member_id AND er.status = 'attended'
+                    WHERE m.id = {int(member_id)}
+                    GROUP BY m.id, m.name, m.joined_date, m.status
+                ''')
+                
+                profile = cur.fetchone()
+                
+                if profile:
+                    name, joined, status, attended = profile
+                    response_text = f'''👤 Ваш профиль
+
+Имя: {name}
+Дата регистрации: {joined.strftime("%d.%m.%Y")}
+Статус: {status}
+Посещено мероприятий: {attended}'''
+        
+        else:
+            response_text = 'Неизвестная команда. Используйте /help для списка команд'
+        
+        if response_text:
+            escaped_text = text.replace("'", "''")
+            now_timestamp = datetime.now().isoformat()
+            cur.execute(
+                f"INSERT INTO messages (telegram_id, message_text, direction, sent_at) VALUES ({int(telegram_id)}, '{escaped_text}', 'incoming', '{now_timestamp}')"
+            )
+            conn.commit()
+            
+            import urllib.request
+            import urllib.parse
+            
+            escaped_response = response_text.replace("'", "''")
+            cur.execute(
+                f"INSERT INTO messages (telegram_id, message_text, direction, sent_at) VALUES ({int(chat_id)}, '{escaped_response}', 'outgoing', '{now_timestamp}')"
+            )
+            conn.commit()
+            
+            url = f'https://api.telegram.org/bot{bot_token}/sendMessage'
+            data = urllib.parse.urlencode({
+                'chat_id': chat_id,
+                'text': response_text,
+                'parse_mode': 'HTML'
+            }).encode()
+            
+            req = urllib.request.Request(url, data=data)
+            urllib.request.urlopen(req)
         
         cur.close()
         conn.close()
         
-        if response_text and bot_token:
-            try:
-                send_message(bot_token, chat_id, response_text)
-            except:
-                pass
-        
         return {
             'statusCode': 200,
             'headers': {'Content-Type': 'application/json'},
-            'isBase64Encoded': False,
             'body': json.dumps({'ok': True})
         }
-        
+    
     except Exception as e:
         return {
             'statusCode': 500,
             'headers': {'Content-Type': 'application/json'},
-            'isBase64Encoded': False,
             'body': json.dumps({'error': str(e)})
         }
 
 
-def send_message(token: str, chat_id: int, text: str) -> None:
-    import urllib.request
-    import urllib.parse
-    
-    url = f'https://api.telegram.org/bot{token}/sendMessage'
-    data = urllib.parse.urlencode({
-        'chat_id': chat_id,
-        'text': text,
-        'parse_mode': 'HTML'
-    }).encode()
-    
-    req = urllib.request.Request(url, data=data)
-    urllib.request.urlopen(req)
-
-
 def handle_db_request(method: str, path: str, event: Dict[str, Any]) -> Dict[str, Any]:
+    '''Handle database API requests'''
     database_url = os.environ.get('DATABASE_URL', '')
-    bot_token = os.environ.get('TELEGRAM_BOT_TOKEN', '')
     
     if not database_url:
         return {
@@ -343,167 +318,254 @@ def handle_db_request(method: str, path: str, event: Dict[str, Any]) -> Dict[str
             'body': json.dumps({'error': 'Database not configured'})
         }
     
-    # Разрешаем POST для отправки сообщений
-    if method != 'GET' and path not in ['send-message']:
-        return {
-            'statusCode': 405,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            },
-            'body': json.dumps({'error': 'Method not allowed'})
-        }
-    
     try:
         conn = psycopg2.connect(database_url)
         cur = conn.cursor()
         
         if path == 'members':
-            cur.execute('''
-                SELECT 
-                    m.id,
-                    m.name,
-                    m.joined_date,
-                    m.status,
-                    COUNT(DISTINCT er.event_id) as events_count,
-                    ARRAY_AGG(DISTINCT mp.format ORDER BY mp.format) as formats
-                FROM members m
-                LEFT JOIN event_registrations er ON m.id = er.member_id
-                LEFT JOIN member_preferences mp ON m.id = mp.member_id
-                GROUP BY m.id
-                ORDER BY m.joined_date DESC
-            ''')
+            if method == 'GET':
+                cur.execute('''
+                    SELECT 
+                        m.id,
+                        m.name,
+                        m.telegram_id,
+                        m.username,
+                        m.joined_date,
+                        m.status,
+                        COUNT(DISTINCT er.event_id) as events_count
+                    FROM members m
+                    LEFT JOIN event_registrations er ON m.id = er.member_id
+                    GROUP BY m.id
+                    ORDER BY m.joined_date DESC
+                ''')
+                
+                members = []
+                for row in cur.fetchall():
+                    members.append({
+                        'id': row[0],
+                        'name': row[1],
+                        'telegram_id': row[2],
+                        'username': row[3],
+                        'joined_date': row[4].isoformat() if row[4] else None,
+                        'status': row[5],
+                        'events_count': row[6]
+                    })
+                
+                cur.close()
+                conn.close()
+                
+                return {
+                    'statusCode': 200,
+                    'headers': {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                    },
+                    'body': json.dumps(members)
+                }
             
-            rows = cur.fetchall()
-            members = []
-            
-            for row in rows:
-                member_id, name, joined, status, events_count, formats = row
-                members.append({
-                    'id': member_id,
-                    'name': name,
-                    'joined': joined.strftime('%d.%m.%Y'),
-                    'events': events_count or 0,
-                    'format': [f for f in (formats or []) if f],
-                    'status': status
-                })
-            
-            result = members
+            elif method == 'POST':
+                body = json.loads(event.get('body', '{}'))
+                name = body.get('name', '')
+                telegram_id = body.get('telegram_id')
+                username = body.get('username', '')
+                status = body.get('status', 'new')
+                
+                escaped_name = name.replace("'", "''")
+                escaped_username = username.replace("'", "''")
+                escaped_status = status.replace("'", "''")
+                today_date = datetime.now().date().isoformat()
+                
+                cur.execute(
+                    f"INSERT INTO members (name, telegram_id, username, joined_date, status) VALUES ('{escaped_name}', {int(telegram_id) if telegram_id else 'NULL'}, '{escaped_username}', '{today_date}', '{escaped_status}') RETURNING id, name, telegram_id, username, joined_date, status"
+                )
+                
+                result = cur.fetchone()
+                conn.commit()
+                cur.close()
+                conn.close()
+                
+                return {
+                    'statusCode': 201,
+                    'headers': {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                    },
+                    'body': json.dumps({
+                        'id': result[0],
+                        'name': result[1],
+                        'telegram_id': result[2],
+                        'username': result[3],
+                        'joined_date': result[4].isoformat() if result[4] else None,
+                        'status': result[5]
+                    })
+                }
         
         elif path == 'events':
-            cur.execute('''
-                SELECT 
-                    e.id,
-                    e.title,
-                    e.event_date,
-                    e.start_time,
-                    e.location,
-                    e.capacity,
-                    e.format,
-                    e.description,
-                    COUNT(er.member_id) as registered
-                FROM events e
-                LEFT JOIN event_registrations er ON e.id = er.event_id
-                GROUP BY e.id
-                ORDER BY e.event_date, e.start_time
-            ''')
-            
-            rows = cur.fetchall()
-            events = []
-            
-            for row in rows:
-                evt_id, title, date, time, location, capacity, fmt, desc, registered = row
+            if method == 'GET':
+                cur.execute('''
+                    SELECT 
+                        e.id,
+                        e.title,
+                        e.description,
+                        e.event_date,
+                        e.start_time,
+                        e.end_time,
+                        e.location,
+                        e.capacity,
+                        e.format,
+                        e.parmaster,
+                        e.price,
+                        COUNT(er.member_id) as registered
+                    FROM events e
+                    LEFT JOIN event_registrations er ON e.id = er.event_id
+                    GROUP BY e.id
+                    ORDER BY e.event_date DESC, e.start_time DESC
+                ''')
                 
-                status = 'upcoming'
-                if registered >= capacity:
-                    status = 'full'
+                events = []
+                for row in cur.fetchall():
+                    events.append({
+                        'id': row[0],
+                        'title': row[1],
+                        'description': row[2],
+                        'event_date': row[3].isoformat() if row[3] else None,
+                        'start_time': row[4].isoformat() if row[4] else None,
+                        'end_time': row[5].isoformat() if row[5] else None,
+                        'location': row[6],
+                        'capacity': row[7],
+                        'format': row[8],
+                        'parmaster': row[9],
+                        'price': row[10],
+                        'registered': row[11]
+                    })
                 
-                events.append({
-                    'id': evt_id,
-                    'title': title,
-                    'date': date.strftime('%d.%m.%Y'),
-                    'time': time.strftime('%H:%M'),
-                    'location': location,
-                    'capacity': capacity,
-                    'registered': registered,
-                    'format': fmt,
-                    'status': status,
-                    'description': desc or ''
-                })
+                cur.close()
+                conn.close()
+                
+                return {
+                    'statusCode': 200,
+                    'headers': {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                    },
+                    'body': json.dumps(events)
+                }
             
-            result = events
+            elif method == 'POST':
+                body = json.loads(event.get('body', '{}'))
+                
+                title = body.get('title', '').replace("'", "''")
+                description = body.get('description', '').replace("'", "''")
+                event_date = body.get('event_date', '')
+                start_time = body.get('start_time', '')
+                end_time = body.get('end_time', '')
+                location = body.get('location', '').replace("'", "''")
+                capacity = int(body.get('capacity', 10))
+                format_val = body.get('format', 'mixed').replace("'", "''")
+                parmaster = body.get('parmaster', '').replace("'", "''")
+                price = int(body.get('price', 0))
+                
+                cur.execute(
+                    f"INSERT INTO events (title, description, event_date, start_time, end_time, location, capacity, format, parmaster, price) VALUES ('{title}', '{description}', '{event_date}', '{start_time}', '{end_time}', '{location}', {capacity}, '{format_val}', '{parmaster}', {price}) RETURNING id, title, description, event_date, start_time, end_time, location, capacity, format, parmaster, price"
+                )
+                
+                result = cur.fetchone()
+                conn.commit()
+                cur.close()
+                conn.close()
+                
+                return {
+                    'statusCode': 201,
+                    'headers': {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                    },
+                    'body': json.dumps({
+                        'id': result[0],
+                        'title': result[1],
+                        'description': result[2],
+                        'event_date': result[3].isoformat() if result[3] else None,
+                        'start_time': result[4].isoformat() if result[4] else None,
+                        'end_time': result[5].isoformat() if result[5] else None,
+                        'location': result[6],
+                        'capacity': result[7],
+                        'format': result[8],
+                        'parmaster': result[9],
+                        'price': result[10]
+                    })
+                }
         
         elif path == 'stats':
-            cur.execute('SELECT COUNT(*) FROM members')
+            cur.execute("SELECT COUNT(*) FROM members")
             total_members = cur.fetchone()[0]
             
-            cur.execute("SELECT COUNT(*) FROM members WHERE status = 'active'")
-            active_members = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM events WHERE event_date >= CURRENT_DATE")
+            upcoming_events = cur.fetchone()[0]
             
-            cur.execute('''
-                SELECT COUNT(*) FROM events 
-                WHERE event_date >= date_trunc('month', CURRENT_DATE)
-                AND event_date < date_trunc('month', CURRENT_DATE) + interval '1 month'
-            ''')
-            events_this_month = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM event_registrations")
+            total_registrations = cur.fetchone()[0]
             
-            cur.execute('''
-                SELECT 
-                    ROUND(
-                        (COUNT(CASE WHEN er.status = 'attended' THEN 1 END)::numeric / 
-                        NULLIF(COUNT(*), 0)) * 100
-                    )
-                FROM event_registrations er
-            ''')
-            attendance = cur.fetchone()[0] or 0
+            cur.execute("SELECT COUNT(*) FROM messages")
+            total_messages = cur.fetchone()[0]
             
-            result = {
-                'totalMembers': total_members,
-                'activeMembers': active_members,
-                'eventsThisMonth': events_this_month,
-                'attendance': int(attendance)
+            cur.close()
+            conn.close()
+            
+            return {
+                'statusCode': 200,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                'body': json.dumps({
+                    'total_members': total_members,
+                    'upcoming_events': upcoming_events,
+                    'total_registrations': total_registrations,
+                    'total_messages': total_messages
+                })
             }
         
         elif path == 'messages':
-            # Получаем все сообщения с информацией об участниках
-            cur.execute('''
+            limit = int(event.get('queryStringParameters', {}).get('limit', 50))
+            
+            cur.execute(f'''
                 SELECT 
                     m.id,
                     m.telegram_id,
                     m.message_text,
-                    m.sender_type,
-                    m.created_at,
-                    m.is_read,
-                    m.admin_name,
-                    mem.name as member_name,
-                    mem.username
+                    m.direction,
+                    m.sent_at,
+                    mem.name
                 FROM messages m
-                LEFT JOIN members mem ON m.member_id = mem.id
-                ORDER BY m.created_at DESC
-                LIMIT 100
+                LEFT JOIN members mem ON m.telegram_id = mem.telegram_id
+                ORDER BY m.sent_at DESC
+                LIMIT {int(limit)}
             ''')
             
-            rows = cur.fetchall()
             messages = []
-            
-            for row in rows:
-                msg_id, tg_id, text, sender, created, is_read, admin, mem_name, username = row
+            for row in cur.fetchall():
                 messages.append({
-                    'id': msg_id,
-                    'telegramId': tg_id,
-                    'text': text,
-                    'sender': sender,
-                    'timestamp': created.isoformat(),
-                    'isRead': is_read,
-                    'adminName': admin,
-                    'memberName': mem_name,
-                    'username': username
+                    'id': row[0],
+                    'telegram_id': row[1],
+                    'message_text': row[2],
+                    'direction': row[3],
+                    'sent_at': row[4].isoformat() if row[4] else None,
+                    'member_name': row[5]
                 })
             
-            result = messages
+            cur.close()
+            conn.close()
+            
+            return {
+                'statusCode': 200,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                'body': json.dumps(messages)
+            }
         
         elif path == 'send-message':
-            # Отправка сообщения участнику от администратора
             if method != 'POST':
                 return {
                     'statusCode': 405,
@@ -515,58 +577,64 @@ def handle_db_request(method: str, path: str, event: Dict[str, Any]) -> Dict[str
                 }
             
             body = json.loads(event.get('body', '{}'))
-            telegram_id = body.get('telegramId')
-            message_text = body.get('message')
-            admin_name = body.get('adminName', 'Администратор')
+            telegram_id = body.get('telegram_id')
+            message_text = body.get('message_text', '')
             
-            if not telegram_id or not message_text:
+            bot_token = os.environ.get('TELEGRAM_BOT_TOKEN', '')
+            
+            if not bot_token:
                 return {
-                    'statusCode': 400,
+                    'statusCode': 500,
                     'headers': {
                         'Content-Type': 'application/json',
                         'Access-Control-Allow-Origin': '*'
                     },
-                    'body': json.dumps({'error': 'Missing telegramId or message'})
+                    'body': json.dumps({'error': 'Bot token not configured'})
                 }
             
-            # Сохраняем сообщение в БД
+            import urllib.request
+            import urllib.parse
+            
+            url = f'https://api.telegram.org/bot{bot_token}/sendMessage'
+            data = urllib.parse.urlencode({
+                'chat_id': telegram_id,
+                'text': message_text,
+                'parse_mode': 'HTML'
+            }).encode()
+            
+            req = urllib.request.Request(url, data=data)
+            response = urllib.request.urlopen(req)
+            
+            escaped_message_text = message_text.replace("'", "''")
+            now_timestamp = datetime.now().isoformat()
             cur.execute(
-                "SELECT id FROM members WHERE telegram_id = %s",
-                (telegram_id,)
+                f"INSERT INTO messages (telegram_id, message_text, direction, sent_at) VALUES ({int(telegram_id)}, '{escaped_message_text}', 'outgoing', '{now_timestamp}')"
             )
-            member = cur.fetchone()
+            conn.commit()
+            cur.close()
+            conn.close()
             
-            if member:
-                member_id = member[0]
-                cur.execute(
-                    "INSERT INTO messages (member_id, telegram_id, message_text, sender_type, admin_name) VALUES (%s, %s, %s, %s, %s)",
-                    (member_id, telegram_id, message_text, 'admin', admin_name)
-                )
-                conn.commit()
-            
-            # Отправляем сообщение в Telegram
-            if bot_token:
-                formatted_text = f"💬 Сообщение от администратора:\n\n{message_text}"
-                send_message(bot_token, telegram_id, formatted_text)
-            
-            result = {'success': True}
-        
-        else:
-            result = {'error': 'Unknown resource'}
+            return {
+                'statusCode': 200,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                'body': json.dumps({'ok': True})
+            }
         
         cur.close()
         conn.close()
         
         return {
-            'statusCode': 200,
+            'statusCode': 404,
             'headers': {
                 'Content-Type': 'application/json',
                 'Access-Control-Allow-Origin': '*'
             },
-            'isBase64Encoded': False,
-            'body': json.dumps(result)
+            'body': json.dumps({'error': 'Not found'})
         }
-        
+    
     except Exception as e:
         return {
             'statusCode': 500,
