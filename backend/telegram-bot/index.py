@@ -48,9 +48,14 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         }
     
     try:
-        update = json.loads(event.get('body', '{}'))
+        body_raw = event.get('body', '{}')
+        print(f"Received webhook body: {body_raw}")
+        update = json.loads(body_raw)
+        print(f"Parsed update: {update}")
         
         if 'message' not in update:
+            print("No message in update, skipping")
+
             return {
                 'statusCode': 200,
                 'headers': {'Content-Type': 'application/json'},
@@ -60,6 +65,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         message = update['message']
         chat_id = message['chat']['id']
         text = message.get('text', '')
+        print(f"Processing message: {text} from chat_id: {chat_id}")
         user = message['from']
         
         telegram_id = user['id']
