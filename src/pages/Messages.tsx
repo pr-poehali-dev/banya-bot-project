@@ -27,7 +27,7 @@ const Messages = () => {
 
   const fetchMessages = async () => {
     try {
-      const response = await fetch('https://functions.poehali.dev/9e4889bc-77cf-4bd8-87e2-4220702d651d/messages');
+      const response = await fetch('https://functions.poehali.dev/9e4889bc-77cf-4bd8-87e2-4220702d651d?path=messages');
       const data = await response.json();
       setMessages(Array.isArray(data) ? data : []);
       setLoading(false);
@@ -80,7 +80,7 @@ const Messages = () => {
     if (!replyText.trim() || !selectedChat) return;
 
     try {
-      const response = await fetch('https://functions.poehali.dev/9e4889bc-77cf-4bd8-87e2-4220702d651d/send-message', {
+      const response = await fetch('https://functions.poehali.dev/9e4889bc-77cf-4bd8-87e2-4220702d651d?path=send-message', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

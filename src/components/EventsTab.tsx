@@ -63,7 +63,7 @@ const EventsTab = ({ events, formatBadge, isLoading, onEventCreated }: EventsTab
 
     setLoading(true);
     try {
-      const response = await fetch('https://functions.poehali.dev/9e4889bc-77cf-4bd8-87e2-4220702d651d/events', {
+      const response = await fetch('https://functions.poehali.dev/9e4889bc-77cf-4bd8-87e2-4220702d651d?path=events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

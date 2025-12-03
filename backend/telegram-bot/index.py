@@ -12,8 +12,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Returns: HTTP response dict with statusCode, headers, body
     '''
     method: str = event.get('httpMethod', 'POST')
-    raw_path = event.get('url', '')
-    path = raw_path.strip('/').split('/')[-1] if raw_path else ''
+    
+    # Try to get path from query parameters
+    query_params = event.get('queryStringParameters') or {}
+    path = query_params.get('path', '')
     
     if method == 'OPTIONS':
         return {
@@ -338,7 +340,8 @@ def handle_db_request(method: str, path: str, event: Dict[str, Any]) -> Dict[str
                 'Content-Type': 'application/json',
                 'Access-Control-Allow-Origin': '*'
             },
-            'body': json.dumps({'error': 'Database not configured'})
+            'body': json.dumps({'error': 'Database not configured'}),
+            'isBase64Encoded': False
         }
     
     try:
@@ -383,7 +386,8 @@ def handle_db_request(method: str, path: str, event: Dict[str, Any]) -> Dict[str
                         'Content-Type': 'application/json',
                         'Access-Control-Allow-Origin': '*'
                     },
-                    'body': json.dumps(members)
+                    'body': json.dumps(members),
+                    'isBase64Encoded': False
                 }
             
             elif method == 'POST':
@@ -399,7 +403,7 @@ def handle_db_request(method: str, path: str, event: Dict[str, Any]) -> Dict[str
                 today_date = datetime.now().date().isoformat()
                 
                 cur.execute(
-                    f"INSERT INTO members (name, telegram_id, username, joined_date, status) VALUES ('{escaped_name}', {int(telegram_id) if telegram_id else 'NULL'}, '{escaped_username}', '{today_date}', '{escaped_status}') RETURNING id, name, telegram_id, username, joined_date, status"
+                    f"INSERT INTO members (name, telegram_id, phone, joined_at, status) VALUES ('{escaped_name}', {int(telegram_id) if telegram_id else 'NULL'}, '{escaped_username}', '{today_date}', '{escaped_status}') RETURNING id, name, telegram_id, phone, joined_at, status"
                 )
                 
                 result = cur.fetchone()
@@ -420,7 +424,8 @@ def handle_db_request(method: str, path: str, event: Dict[str, Any]) -> Dict[str
                         'username': result[3],
                         'joined_date': result[4].isoformat() if result[4] else None,
                         'status': result[5]
-                    })
+                    }),
+                    'isBase64Encoded': False
                 }
         
         elif path == 'events':
@@ -465,7 +470,8 @@ def handle_db_request(method: str, path: str, event: Dict[str, Any]) -> Dict[str
                         'Content-Type': 'application/json',
                         'Access-Control-Allow-Origin': '*'
                     },
-                    'body': json.dumps(events)
+                    'body': json.dumps(events),
+                    'isBase64Encoded': False
                 }
             
             elif method == 'POST':
@@ -503,7 +509,8 @@ def handle_db_request(method: str, path: str, event: Dict[str, Any]) -> Dict[str
                         'location': result[5],
                         'capacity': result[6],
                         'format': result[7]
-                    })
+                    }),
+                    'isBase64Encoded': False
                 }
         
         elif path == 'stats':
@@ -533,7 +540,8 @@ def handle_db_request(method: str, path: str, event: Dict[str, Any]) -> Dict[str
                     'upcoming_events': upcoming_events,
                     'total_registrations': total_registrations,
                     'total_messages': total_messages
-                })
+                }),
+                'isBase64Encoded': False
             }
         
         elif path == 'messages':
@@ -575,7 +583,8 @@ def handle_db_request(method: str, path: str, event: Dict[str, Any]) -> Dict[str
                     'Content-Type': 'application/json',
                     'Access-Control-Allow-Origin': '*'
                 },
-                'body': json.dumps(messages)
+                'body': json.dumps(messages),
+                'isBase64Encoded': False
             }
         
         elif path == 'send-message':
@@ -586,7 +595,8 @@ def handle_db_request(method: str, path: str, event: Dict[str, Any]) -> Dict[str
                         'Content-Type': 'application/json',
                         'Access-Control-Allow-Origin': '*'
                     },
-                    'body': json.dumps({'error': 'Method not allowed'})
+                    'body': json.dumps({'error': 'Method not allowed'}),
+                    'isBase64Encoded': False
                 }
             
             body = json.loads(event.get('body', '{}'))
@@ -603,7 +613,8 @@ def handle_db_request(method: str, path: str, event: Dict[str, Any]) -> Dict[str
                         'Content-Type': 'application/json',
                         'Access-Control-Allow-Origin': '*'
                     },
-                    'body': json.dumps({'error': 'Bot token not configured'})
+                    'body': json.dumps({'error': 'Bot token not configured'}),
+                    'isBase64Encoded': False
                 }
             
             import urllib.request
@@ -635,7 +646,8 @@ def handle_db_request(method: str, path: str, event: Dict[str, Any]) -> Dict[str
                         'Content-Type': 'application/json',
                         'Access-Control-Allow-Origin': '*'
                     },
-                    'body': json.dumps({'ok': True})
+                    'body': json.dumps({'ok': True}),
+                    'isBase64Encoded': False
                 }
             except Exception as e:
                 cur.close()
@@ -646,7 +658,8 @@ def handle_db_request(method: str, path: str, event: Dict[str, Any]) -> Dict[str
                         'Content-Type': 'application/json',
                         'Access-Control-Allow-Origin': '*'
                     },
-                    'body': json.dumps({'error': str(e)})
+                    'body': json.dumps({'error': str(e)}),
+                    'isBase64Encoded': False
                 }
         
         cur.close()
@@ -658,7 +671,8 @@ def handle_db_request(method: str, path: str, event: Dict[str, Any]) -> Dict[str
                 'Content-Type': 'application/json',
                 'Access-Control-Allow-Origin': '*'
             },
-            'body': json.dumps({'error': 'Not found'})
+            'body': json.dumps({'error': 'Not found'}),
+            'isBase64Encoded': False
         }
     
     except Exception as e:
@@ -668,5 +682,6 @@ def handle_db_request(method: str, path: str, event: Dict[str, Any]) -> Dict[str
                 'Content-Type': 'application/json',
                 'Access-Control-Allow-Origin': '*'
             },
-            'body': json.dumps({'error': str(e)})
+            'body': json.dumps({'error': str(e)}),
+            'isBase64Encoded': False
         }

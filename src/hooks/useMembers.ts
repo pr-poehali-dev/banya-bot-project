@@ -13,7 +13,7 @@ export const useMembers = () => {
   return useQuery({
     queryKey: ['members'],
     queryFn: async (): Promise<Member[]> => {
-      const response = await fetch('https://functions.poehali.dev/9e4889bc-77cf-4bd8-87e2-4220702d651d/members');
+      const response = await fetch('https://functions.poehali.dev/9e4889bc-77cf-4bd8-87e2-4220702d651d?path=members');
       
       if (!response.ok) {
         throw new Error('Failed to fetch members');
