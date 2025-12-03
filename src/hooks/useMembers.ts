@@ -13,27 +13,7 @@ export const useMembers = () => {
   return useQuery({
     queryKey: ['members'],
     queryFn: async (): Promise<Member[]> => {
-      const response = await fetch('/api/sql', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          query: `
-            SELECT 
-              m.id,
-              m.name,
-              m.joined_at as joined,
-              m.events_attended as events,
-              m.status,
-              ARRAY_AGG(mp.format) as format
-            FROM members m
-            LEFT JOIN member_preferences mp ON m.id = mp.member_id
-            GROUP BY m.id, m.name, m.joined_at, m.events_attended, m.status
-            ORDER BY m.id
-          `
-        })
-      });
+      const response = await fetch('https://functions.poehali.dev/9e4889bc-77cf-4bd8-87e2-4220702d651d/members');
       
       if (!response.ok) {
         throw new Error('Failed to fetch members');
@@ -43,9 +23,9 @@ export const useMembers = () => {
       return data.map((row: any) => ({
         id: row.id,
         name: row.name,
-        joined: row.joined,
-        events: row.events,
-        format: row.format && row.format[0] ? row.format : [],
+        joined: row.joined_date,
+        events: row.events_count || 0,
+        format: [],
         status: row.status
       }));
     }

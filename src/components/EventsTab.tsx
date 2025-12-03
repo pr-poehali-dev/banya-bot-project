@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/hooks/use-toast';
 
 interface Event {
   id: number;
@@ -32,9 +34,78 @@ interface EventsTabProps {
   events: Event[];
   formatBadge: (format: string) => string;
   isLoading?: boolean;
+  onEventCreated?: () => void;
 }
 
-const EventsTab = ({ events, formatBadge, isLoading }: EventsTabProps) => {
+const EventsTab = ({ events, formatBadge, isLoading, onEventCreated }: EventsTabProps) => {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
+  const [formData, setFormData] = useState({
+    title: '',
+    date: '',
+    time: '',
+    location: '',
+    format: 'women',
+    capacity: '15',
+    description: ''
+  });
+
+  const handleSubmit = async () => {
+    if (!formData.title || !formData.date || !formData.time || !formData.location) {
+      toast({
+        title: 'Ошибка',
+        description: 'Заполните все обязательные поля',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch('https://functions.poehali.dev/9e4889bc-77cf-4bd8-87e2-4220702d651d/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: formData.title,
+          date: formData.date,
+          time: formData.time,
+          location: formData.location,
+          format: formData.format,
+          capacity: parseInt(formData.capacity) || 15,
+          description: formData.description
+        })
+      });
+
+      if (response.ok) {
+        toast({
+          title: 'Успешно',
+          description: 'Мероприятие создано'
+        });
+        setOpen(false);
+        setFormData({
+          title: '',
+          date: '',
+          time: '',
+          location: '',
+          format: 'women',
+          capacity: '15',
+          description: ''
+        });
+        if (onEventCreated) onEventCreated();
+      } else {
+        throw new Error('Failed to create event');
+      }
+    } catch (error) {
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось создать мероприятие',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
@@ -42,7 +113,7 @@ const EventsTab = ({ events, formatBadge, isLoading }: EventsTabProps) => {
           <h2 className="text-2xl font-semibold">Мероприятия</h2>
           <p className="text-sm text-muted-foreground">Управление событиями</p>
         </div>
-        <Dialog>
+        <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button>
               <Icon name="Plus" size={16} className="mr-2" />
@@ -59,26 +130,46 @@ const EventsTab = ({ events, formatBadge, isLoading }: EventsTabProps) => {
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
                 <Label htmlFor="title">Название</Label>
-                <Input id="title" placeholder="Женская баня с пармастером" />
+                <Input 
+                  id="title" 
+                  placeholder="Женская баня с пармастером"
+                  value={formData.title}
+                  onChange={(e) => setFormData({...formData, title: e.target.value})}
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <Label htmlFor="date">Дата</Label>
-                  <Input id="date" type="date" />
+                  <Input 
+                    id="date" 
+                    type="date"
+                    value={formData.date}
+                    onChange={(e) => setFormData({...formData, date: e.target.value})}
+                  />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="time">Время</Label>
-                  <Input id="time" type="time" />
+                  <Input 
+                    id="time" 
+                    type="time"
+                    value={formData.time}
+                    onChange={(e) => setFormData({...formData, time: e.target.value})}
+                  />
                 </div>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="location">Место</Label>
-                <Input id="location" placeholder="Баня на Сретенке" />
+                <Input 
+                  id="location" 
+                  placeholder="Баня на Сретенке"
+                  value={formData.location}
+                  onChange={(e) => setFormData({...formData, location: e.target.value})}
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <Label htmlFor="format">Формат</Label>
-                  <Select>
+                  <Select value={formData.format} onValueChange={(value) => setFormData({...formData, format: value})}>
                     <SelectTrigger id="format">
                       <SelectValue placeholder="Выберите формат" />
                     </SelectTrigger>
@@ -91,7 +182,13 @@ const EventsTab = ({ events, formatBadge, isLoading }: EventsTabProps) => {
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="capacity">Мест</Label>
-                  <Input id="capacity" type="number" placeholder="15" />
+                  <Input 
+                    id="capacity" 
+                    type="number" 
+                    placeholder="15"
+                    value={formData.capacity}
+                    onChange={(e) => setFormData({...formData, capacity: e.target.value})}
+                  />
                 </div>
               </div>
               <div className="grid gap-2">
@@ -100,12 +197,16 @@ const EventsTab = ({ events, formatBadge, isLoading }: EventsTabProps) => {
                   id="description"
                   placeholder="Мягкий пар, купель, травяной чай..."
                   rows={3}
+                  value={formData.description}
+                  onChange={(e) => setFormData({...formData, description: e.target.value})}
                 />
               </div>
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline">Отмена</Button>
-              <Button>Создать</Button>
+              <Button variant="outline" onClick={() => setOpen(false)}>Отмена</Button>
+              <Button onClick={handleSubmit} disabled={loading}>
+                {loading ? 'Создание...' : 'Создать'}
+              </Button>
             </div>
           </DialogContent>
         </Dialog>

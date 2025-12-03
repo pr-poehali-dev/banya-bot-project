@@ -14,7 +14,7 @@ const Index = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   
   const { data: membersData = [], isLoading: membersLoading } = useMembers();
-  const { data: eventsData = [], isLoading: eventsLoading } = useEvents();
+  const { data: eventsData = [], isLoading: eventsLoading, refetch: refetchEvents } = useEvents();
   const { data: statsData } = useStats();
 
   const stats = [
@@ -129,6 +129,7 @@ const Index = () => {
               events={eventsData} 
               formatBadge={formatBadge}
               isLoading={eventsLoading}
+              onEventCreated={refetchEvents}
             />
           )}
 

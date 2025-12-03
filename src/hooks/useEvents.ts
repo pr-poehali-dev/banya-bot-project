@@ -16,30 +16,7 @@ export const useEvents = () => {
   return useQuery({
     queryKey: ['events'],
     queryFn: async (): Promise<Event[]> => {
-      const response = await fetch('/api/sql', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          query: `
-            SELECT 
-              e.id,
-              e.title,
-              e.date,
-              e.time,
-              e.location,
-              e.format,
-              e.capacity,
-              e.status,
-              COUNT(er.id) as registered
-            FROM events e
-            LEFT JOIN event_registrations er ON e.id = er.event_id
-            GROUP BY e.id
-            ORDER BY e.date, e.time
-          `
-        })
-      });
+      const response = await fetch('https://functions.poehali.dev/9e4889bc-77cf-4bd8-87e2-4220702d651d/events');
       
       if (!response.ok) {
         throw new Error('Failed to fetch events');
@@ -55,7 +32,7 @@ export const useEvents = () => {
           id: row.id,
           title: row.title,
           date: row.date,
-          time: row.time.substring(0, 5),
+          time: row.time,
           location: row.location,
           registered,
           capacity,
