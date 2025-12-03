@@ -351,14 +351,14 @@ def handle_db_request(method: str, path: str, event: Dict[str, Any]) -> Dict[str
                         m.id,
                         m.name,
                         m.telegram_id,
-                        m.username,
-                        m.joined_date,
+                        m.phone,
+                        m.joined_at,
                         m.status,
                         COUNT(DISTINCT er.event_id) as events_count
                     FROM members m
                     LEFT JOIN event_registrations er ON m.id = er.member_id
                     GROUP BY m.id
-                    ORDER BY m.joined_date DESC
+                    ORDER BY m.joined_at DESC
                 ''')
                 
                 members = []
@@ -555,12 +555,13 @@ def handle_db_request(method: str, path: str, event: Dict[str, Any]) -> Dict[str
                     m.id,
                     m.telegram_id,
                     m.message_text,
-                    m.direction,
-                    m.sent_at,
+                    m.sender_type,
+                    m.created_at,
+                    m.is_read,
                     mem.name
                 FROM messages m
                 LEFT JOIN members mem ON m.telegram_id = mem.telegram_id
-                ORDER BY m.sent_at DESC
+                ORDER BY m.created_at DESC
                 LIMIT {int(limit)}
             ''')
             
@@ -568,11 +569,12 @@ def handle_db_request(method: str, path: str, event: Dict[str, Any]) -> Dict[str
             for row in cur.fetchall():
                 messages.append({
                     'id': row[0],
-                    'telegram_id': row[1],
-                    'message_text': row[2],
-                    'direction': row[3],
-                    'sent_at': row[4].isoformat() if row[4] else None,
-                    'member_name': row[5]
+                    'telegramId': row[1],
+                    'text': row[2],
+                    'sender': row[3],
+                    'timestamp': row[4].isoformat() if row[4] else None,
+                    'isRead': row[5],
+                    'memberName': row[6]
                 })
             
             cur.close()

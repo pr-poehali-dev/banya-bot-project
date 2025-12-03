@@ -29,7 +29,7 @@ const Messages = () => {
     try {
       const response = await fetch('https://functions.poehali.dev/9e4889bc-77cf-4bd8-87e2-4220702d651d/messages');
       const data = await response.json();
-      setMessages(data);
+      setMessages(Array.isArray(data) ? data : []);
       setLoading(false);
     } catch (error) {
       toast({
@@ -37,6 +37,7 @@ const Messages = () => {
         description: 'Не удалось загрузить сообщения',
         variant: 'destructive',
       });
+      setMessages([]);
       setLoading(false);
     }
   };
