@@ -91,10 +91,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             if not existing:
                 print(f"New user, inserting into database")
                 escaped_full_name = full_name.replace("'", "''")
-                escaped_username = username.replace("'", "''")
                 today_date = datetime.now().date().isoformat()
                 cur.execute(
-                    f"INSERT INTO members (name, telegram_id, username, joined_date, status) VALUES ('{escaped_full_name}', {int(telegram_id)}, '{escaped_username}', '{today_date}', 'new') RETURNING id"
+                    f"INSERT INTO members (name, telegram_id, joined_at, status) VALUES ('{escaped_full_name}', {int(telegram_id)}, '{today_date}', 'new') RETURNING id"
                 )
                 conn.commit()
                 
@@ -249,13 +248,13 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 cur.execute(f'''
                     SELECT 
                         m.name,
-                        m.joined_date,
+                        m.joined_at,
                         m.status,
                         COUNT(DISTINCT er.event_id) as events_attended
                     FROM members m
                     LEFT JOIN event_registrations er ON m.id = er.member_id AND er.status = 'attended'
                     WHERE m.id = {int(member_id)}
-                    GROUP BY m.id, m.name, m.joined_date, m.status
+                    GROUP BY m.id, m.name, m.joined_at, m.status
                 ''')
                 
                 profile = cur.fetchone()
