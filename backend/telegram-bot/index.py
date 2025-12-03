@@ -602,8 +602,9 @@ def handle_db_request(method: str, path: str, event: Dict[str, Any]) -> Dict[str
                 }
             
             body = json.loads(event.get('body', '{}'))
-            telegram_id = body.get('telegram_id')
-            message_text = body.get('message_text', '')
+            telegram_id = body.get('telegramId') or body.get('telegram_id')
+            message_text = body.get('message') or body.get('message_text', '')
+            admin_name = body.get('adminName', 'Администратор')
             
             bot_token = os.environ.get('TELEGRAM_BOT_TOKEN', '')
             
@@ -620,33 +621,45 @@ def handle_db_request(method: str, path: str, event: Dict[str, Any]) -> Dict[str
             import urllib.request
             import urllib.parse
             
-            url = f'https://api.telegram.org/bot{bot_token}/sendMessage'
-            data = urllib.parse.urlencode({
-                'chat_id': telegram_id,
-                'text': message_text,
-                'parse_mode': 'HTML'
-            }).encode()
-            
-            req = urllib.request.Request(url, data=data)
-            response = urllib.request.urlopen(req)
-            
-            escaped_message_text = message_text.replace("'", "''")
-            now_timestamp = datetime.now().isoformat()
-            cur.execute(
-                f"INSERT INTO messages (telegram_id, message_text, direction, sent_at) VALUES ({int(telegram_id)}, '{escaped_message_text}', 'outgoing', '{now_timestamp}')"
-            )
-            conn.commit()
-            cur.close()
-            conn.close()
-            
-            return {
-                'statusCode': 200,
-                'headers': {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
-                },
-                'body': json.dumps({'ok': True})
-            }
+            try:
+                url = f'https://api.telegram.org/bot{bot_token}/sendMessage'
+                data = urllib.parse.urlencode({
+                    'chat_id': telegram_id,
+                    'text': message_text
+                }).encode()
+                
+                req = urllib.request.Request(url, data=data)
+                response = urllib.request.urlopen(req, timeout=10)
+                
+                escaped_message_text = message_text.replace("'", "''")
+                escaped_admin_name = admin_name.replace("'", "''")
+                now_timestamp = datetime.now().isoformat()
+                cur.execute(
+                    f"INSERT INTO messages (telegram_id, message_text, sender_type, created_at, admin_name) VALUES ({int(telegram_id)}, '{escaped_message_text}', 'admin', '{now_timestamp}', '{escaped_admin_name}')"
+                )
+                conn.commit()
+                cur.close()
+                conn.close()
+                
+                return {
+                    'statusCode': 200,
+                    'headers': {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                    },
+                    'body': json.dumps({'ok': True})
+                }
+            except Exception as e:
+                cur.close()
+                conn.close()
+                return {
+                    'statusCode': 500,
+                    'headers': {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                    },
+                    'body': json.dumps({'error': str(e)})
+                }
         
         cur.close()
         conn.close()
