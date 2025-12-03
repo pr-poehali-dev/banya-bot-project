@@ -277,15 +277,18 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             )
             conn.commit()
             
-            url = f'https://api.telegram.org/bot{bot_token}/sendMessage'
-            data = urllib.parse.urlencode({
-                'chat_id': chat_id,
-                'text': response_text,
-                'parse_mode': 'HTML'
-            }).encode()
-            
-            req = urllib.request.Request(url, data=data)
-            urllib.request.urlopen(req)
+            try:
+                url = f'https://api.telegram.org/bot{bot_token}/sendMessage'
+                data = urllib.parse.urlencode({
+                    'chat_id': chat_id,
+                    'text': response_text
+                }).encode()
+                
+                req = urllib.request.Request(url, data=data)
+                response = urllib.request.urlopen(req, timeout=10)
+                print(f"Message sent to {chat_id}: {response.read().decode()}")
+            except Exception as send_error:
+                print(f"Failed to send message: {send_error}")
         
         cur.close()
         conn.close()
